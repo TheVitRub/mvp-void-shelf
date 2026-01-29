@@ -32,7 +32,7 @@
 """
 import os
 
-YOLO_MODEL = 'my_best-shelf-void-model2026-01-27-16-53.pt'
+YOLO_MODEL = 'my_best-shelf-void-model2026-01-29-10-38.pt'
 CONFIDENCE_THRESHOLD = 0.25
 DETECTION_IMG_SIZE = 640
 SKIP_FRAMES = 7

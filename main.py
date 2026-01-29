@@ -33,9 +33,9 @@ from ultralytics.models import YOLO
 from area_calculation.calculations import load_shelf_coordinates_from_json
 from camera.camera import Camera
 from show_picture.show_picture import ShowPicture
-from config import ID_STORE
+from config import ID_STORE, YOLO_MODEL
 
-model_path=r'my_best-shelf-void-model2026-01-27-16-53.pt'
+model_path=YOLO_MODEL
 model = YOLO(model_path)
 json_path=r'shot_20260123_193334_shelf_coordinates.json'
 shelf_coordinates = load_shelf_coordinates_from_json(json_path)
