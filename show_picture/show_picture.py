@@ -280,9 +280,23 @@ class ShowPicture:
                     fill_percentage = results['fill_percentage']
                     void_percentage = int(round(fill_percentage))  # Округляем до целого числа
                     
-                    # Конвертируем кадр в JPEG формат для отправки
+                    # Создаем копию кадра для рисования рамок
+                    frame_with_boxes = frame.copy()
+                    
+                    # Рисуем красные рамки вокруг обнаруженных объектов
+                    red_color = (0, 0, 255)  # Красный цвет в формате BGR
+                    box_thickness = 3  # Толщина линии рамки
+                    
+                    for obj in results['objects_info']:
+                        x1, y1, x2, y2 = obj['coordinates']
+                        # Преобразуем координаты в целые числа
+                        x1, y1, x2, y2 = int(x1), int(y1), int(x2), int(y2)
+                        # Рисуем красный прямоугольник
+                        cv2.rectangle(frame_with_boxes, (x1, y1), (x2, y2), red_color, box_thickness)
+                    
+                    # Конвертируем кадр с рамками в JPEG формат для отправки
                     # Используем cv2.imencode для кодирования изображения в память
-                    success, buffer = cv2.imencode('.jpg', frame)
+                    success, buffer = cv2.imencode('.jpg', frame_with_boxes)
                     
                     if not success:
                         print("Ошибка кодирования изображения, пропускаем отправку...")

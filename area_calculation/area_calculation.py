@@ -225,12 +225,14 @@ class AreaCalculator:
                    shelf_coordinates: Список координат полок в формате [(x1, y1, x2, y2), ...]
                    filter_objects_in_shelves: Если True, учитываются только объекты, находящиеся внутри полок
 
-               Yields:
-                   Tuple (frame, results_dict) для каждого обработанного кадра
+               Returns:
+                   Tuple (frame, results_dict) для обработанного кадра
                """
 
 
-        frame = camera.read_frame()
+        # Используем read_fresh_frame для получения свежего кадра, очищая буфер
+        # Это важно, когда кадры читаются редко (например, раз в минуту)
+        frame = camera.read_fresh_frame()
 
 
 

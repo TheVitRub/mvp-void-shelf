@@ -19,6 +19,7 @@
 Методы Camera:
     - __init__(ip_camera): Инициализация подключения к камере
     - read_frame(): Чтение одного кадра из видеопотока
+    - read_fresh_frame(): Чтение свежего кадра с очисткой буфера (для редких чтений)
     - release(): Закрытие соединения с камерой
 
 Переменные окружения (.env):
@@ -112,6 +113,40 @@ class Camera:
             self._connect()
             return None
 
+        return frame
+    
+    def read_fresh_frame(self, buffer_size=5):
+        """
+        Читает свежий кадр, предварительно очищая буфер камеры.
+        Это полезно, когда кадры читаются редко (например, раз в минуту),
+        чтобы избежать получения устаревших кадров из буфера.
+        
+        Args:
+            buffer_size: Количество кадров для очистки из буфера перед чтением свежего
+            
+        Returns:
+            Свежий кадр или None, если не удалось получить кадр
+        """
+        if self.cap is None or not self.cap.isOpened():
+            self._connect()
+            return None
+        
+        # Очищаем буфер, читая и отбрасывая старые кадры
+        for _ in range(buffer_size):
+            ret, _ = self.cap.read()
+            if not ret:
+                print("Потеря кадров при очистке буфера. Попытка переподключения...")
+                self._connect()
+                return None
+        
+        # Читаем свежий кадр
+        ret, frame = self.cap.read()
+        
+        if not ret:
+            print("Потеря кадров. Попытка переподключения...")
+            self._connect()
+            return None
+        
         return frame
 
     def release(self):
