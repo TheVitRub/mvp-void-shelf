@@ -115,39 +115,67 @@ class Camera:
 
         return frame
     
-    def read_fresh_frame(self):
+    def read_fresh_frame(self, max_attempts=3):
         """
         Читает свежий кадр, переподключаясь к камере для гарантии актуальности.
         Это нужно, когда кадры читаются редко (например, раз в минуту),
         чтобы избежать получения устаревших кадров из буфера RTSP.
+        
+        Включает проверку целостности кадра и повторные попытки при битых кадрах.
+            
+        Args:
+            max_attempts: Максимальное количество попыток получить целый кадр
             
         Returns:
             Свежий кадр или None, если не удалось получить кадр
         """
-        # Переподключаемся к камере для получения гарантированно свежего кадра
-        self._connect()
+        import time
+        import numpy as np
         
-        if self.cap is None or not self.cap.isOpened():
-            print("Не удалось подключиться к камере")
-            return None
-        
-        # Пропускаем несколько кадров используя grab() (быстрее, не декодирует)
-        # для очистки начального буфера после подключения
-        for _ in range(30):
-            if not self.cap.grab():
-                print("Потеря кадров при очистке буфера. Попытка переподключения...")
-                self._connect()
-                return None
-        
-        # Читаем свежий кадр
-        ret, frame = self.cap.read()
-        
-        if not ret:
-            print("Потеря кадров. Попытка переподключения...")
+        for attempt in range(max_attempts):
+            # Переподключаемся к камере для получения гарантированно свежего кадра
             self._connect()
-            return None
+            
+            if self.cap is None or not self.cap.isOpened():
+                print(f"Попытка {attempt + 1}/{max_attempts}: Не удалось подключиться к камере")
+                time.sleep(0.5)
+                continue
+            
+            # Небольшая пауза для стабилизации потока после подключения
+            time.sleep(0.3)
+            
+            # Пропускаем несколько кадров используя grab() (быстрее, не декодирует)
+            # для очистки начального буфера после подключения
+            for _ in range(30):
+                if not self.cap.grab():
+                    print(f"Попытка {attempt + 1}/{max_attempts}: Потеря кадров при очистке буфера")
+                    break
+            else:
+                # Читаем несколько кадров и берём последний (более стабильный)
+                frame = None
+                for _ in range(3):
+                    ret, frame = self.cap.read()
+                    if not ret:
+                        frame = None
+                        break
+                
+                if frame is not None:
+                    # Проверяем целостность кадра - нижняя часть не должна быть полностью чёрной
+                    height = frame.shape[0]
+                    bottom_part = frame[int(height * 0.9):, :]  # Нижние 10% кадра
+                    
+                    # Если нижняя часть не полностью чёрная (сумма > 0), кадр целый
+                    if np.sum(bottom_part) > 1000:
+                        return frame
+                    else:
+                        print(f"Попытка {attempt + 1}/{max_attempts}: Обнаружен битый кадр (чёрная нижняя часть)")
+                else:
+                    print(f"Попытка {attempt + 1}/{max_attempts}: Не удалось прочитать кадр")
+            
+            time.sleep(0.5)
         
-        return frame
+        print("Не удалось получить целый кадр после всех попыток")
+        return None
 
     def release(self):
         if self.cap:
