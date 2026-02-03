@@ -347,7 +347,7 @@ def load_shelf_coordinates_from_json(json_path: str) -> List[Tuple[float, float,
 def main():
     """Пример использования калибратора."""
     # Путь к изображению (относительно корня проекта)
-    image_path = "dataset/images/train/shot_20260123_193334.jpg"
+    image_path = r"C:\Users\ryabovva.VOLKOVKMR\PycharmProjects\MVP_void_shelf\outline_the_shelves\shot_20260123_090705.jpg"
     
     # Начальные координаты (опционально) - можно загрузить из файла или задать вручную
     initial_shelves = [

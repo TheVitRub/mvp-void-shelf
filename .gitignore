@@ -3,3 +3,7 @@
 .venv/
 *__pycache__/
 to_label/
+to_label_camera_2/
+to_label_camera_1/
+to_label_camera_3/
+*shot*
