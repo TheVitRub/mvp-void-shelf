@@ -237,6 +237,8 @@ class AreaCalculator:
 
 
 
+        if frame is None:
+            return None, {'fill_percentage': 0.0, 'num_objects': 0, 'objects_info': []}
 
         # Обрабатываем кадр
         results = self.calculate_shelf_fill_percentage(

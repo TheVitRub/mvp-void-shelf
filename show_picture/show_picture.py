@@ -370,6 +370,11 @@ class ShowPicture:
         Обрабатывает кадр для Active Learning: сохраняет кадры с низкой/средней 
         уверенностью детекции для последующей разметки.
         
+        Сохраняет 3 файла:
+            - frame_xxx.jpg — чистое фото (для разметки в аннотаторе)
+            - frame_xxx_preview.jpg — фото с рамками (для быстрого просмотра)
+            - frame_xxx.txt — координаты объектов (YOLO формат)
+        
         Стратегия "Двух папок":
             - "maybe" (10-40%): Галлюцинации или новые условия. Много мусора, 
               но могут быть ценные кадры с новых камер.
@@ -431,13 +436,20 @@ class ShowPicture:
         save_dir = os.path.join(self.active_learning_dir, subfolder)
         os.makedirs(save_dir, exist_ok=True)
         
-        # Формируем имя файла с временной меткой и уверенностью
+        # Формируем имена файлов с временной меткой и уверенностью
         timestamp = int(current_time)
         conf_str = f"{conf:.2f}".replace(".", "_")  # 0.35 -> 0_35 для имени файла
-        filename = f"frame_{timestamp}_conf{conf_str}.jpg"
-        filepath = os.path.join(save_dir, filename)
+        base_name = f"frame_{timestamp}_conf{conf_str}"
         
-        # Создаем копию кадра и рисуем рамки вокруг всех обнаруженных объектов
+        # Пути к трём файлам
+        clean_filepath = os.path.join(save_dir, f"{base_name}.jpg")           # Чистое фото
+        preview_filepath = os.path.join(save_dir, f"{base_name}_preview.jpg") # Фото с рамками
+        txt_filepath = os.path.join(save_dir, f"{base_name}.txt")             # Координаты
+        
+        # 1. Сохраняем ЧИСТОЕ фото (для разметки)
+        success_clean = cv2.imwrite(clean_filepath, frame)
+        
+        # 2. Создаём фото с рамками (для быстрого просмотра)
         frame_with_boxes = frame.copy()
         
         for obj in objects_info:
@@ -460,15 +472,47 @@ class ShowPicture:
             cv2.putText(frame_with_boxes, label, (x1, y1 - 5), 
                        cv2.FONT_HERSHEY_SIMPLEX, 0.5, color, 2)
         
-        # Сохраняем кадр
-        success = cv2.imwrite(filepath, frame_with_boxes)
+        success_preview = cv2.imwrite(preview_filepath, frame_with_boxes)
         
-        if success:
+        # 3. Сохраняем TXT с координатами (YOLO формат)
+        height, width = frame.shape[:2]
+        
+        try:
+            with open(txt_filepath, 'w', encoding='utf-8') as f:
+                f.write(f"# Image: {base_name}.jpg\n")
+                f.write(f"# Size: {width}x{height}\n")
+                f.write(f"# Format: class_id x_center y_center box_width box_height\n")
+                f.write(f"# Confidence is in comment for reference\n\n")
+                
+                for obj in objects_info:
+                    x1, y1, x2, y2 = obj['coordinates']
+                    obj_conf = obj.get('confidence', 0)
+                    class_id = obj.get('class_id', 0)
+                    class_name = obj.get('class', 'unknown')
+                    
+                    # YOLO format: нормализованные координаты (0-1)
+                    x_center = ((x1 + x2) / 2) / width
+                    y_center = ((y1 + y2) / 2) / height
+                    box_width = (x2 - x1) / width
+                    box_height = (y2 - y1) / height
+                    
+                    f.write(f"{class_id} {x_center:.6f} {y_center:.6f} {box_width:.6f} {box_height:.6f} # conf={obj_conf:.2f} {class_name}\n")
+            
+            success_txt = True
+        except Exception as e:
+            print(f"[Active Learning] Ошибка записи txt: {e}")
+            success_txt = False
+        
+        if success_clean and success_preview and success_txt:
             self.last_al_save_time = current_time
-            print(f"[Active Learning] Saved: {filepath} (conf: {conf:.2f}, folder: {subfolder})")
+            print(f"[Active Learning] Saved: {base_name} (.jpg + _preview.jpg + .txt) | conf: {conf:.2f} | folder: {subfolder}")
             return True
         else:
-            print(f"[Active Learning] Ошибка сохранения: {filepath}")
+            failed = []
+            if not success_clean: failed.append("clean.jpg")
+            if not success_preview: failed.append("preview.jpg")
+            if not success_txt: failed.append("txt")
+            print(f"[Active Learning] Ошибка сохранения: {', '.join(failed)}")
             return False
     
     def run_active_learning(self, camera: Camera, shelf_coordinates: list, 
@@ -489,10 +533,14 @@ class ShowPicture:
         Структура сохранённых данных:
             to_label/
             ├── maybe/       # Уверенность 10-40% (возможно мусор, требует проверки)
-            │   ├── frame_1706000000_conf0_15.jpg
+            │   ├── frame_1706000000_conf0_15.jpg          # Чистое фото
+            │   ├── frame_1706000000_conf0_15_preview.jpg  # Фото с рамками
+            │   ├── frame_1706000000_conf0_15.txt          # Координаты (YOLO)
             │   └── ...
             └── almost/      # Уверенность 40-60% (золотой фонд для разметки)
-                ├── frame_1706000100_conf0_45.jpg
+                ├── frame_1706000100_conf0_45.jpg          # Чистое фото
+                ├── frame_1706000100_conf0_45_preview.jpg  # Фото с рамками
+                ├── frame_1706000100_conf0_45.txt          # Координаты (YOLO)
                 └── ...
         
         Рекомендации:
@@ -517,9 +565,14 @@ class ShowPicture:
         self.al_save_interval = save_interval
         self.al_conf_low, self.al_conf_high = conf_range
         
+        # ВАЖНО: Понижаем порог детекции YOLO, чтобы детектировать объекты с низкой уверенностью
+        original_threshold = self.area.confidence_threshold
+        self.area.confidence_threshold = conf_range[0]
+        
         print("=" * 60)
         print("Запуск сбора данных для Active Learning")
         print("=" * 60)
+        print(f"Порог детекции YOLO: {self.area.confidence_threshold} (было: {original_threshold})")
         print(f"Директория сохранения: {self.active_learning_dir}/")
         print(f"  ├── maybe/   (уверенность {self.al_conf_low*100:.0f}%-{self.al_conf_mid*100:.0f}%)")
         print(f"  └── almost/  (уверенность {self.al_conf_mid*100:.0f}%-{self.al_conf_high*100:.0f}%)")
@@ -569,5 +622,7 @@ class ShowPicture:
             print(f"  всего:  {saved_count['maybe'] + saved_count['almost']}")
             print("=" * 60)
         finally:
+            # Восстанавливаем оригинальный порог детекции
+            self.area.confidence_threshold = original_threshold
             camera.release()
             print("Камера отключена")
