@@ -127,7 +127,8 @@ def run_camera_active_learning(camera_ip: str, camera_id: int, shelf_coordinates
         # Запускаем active learning с координатами для этой камеры
         show_picture.run_active_learning(
             shelf_coordinates=shelf_coordinates[coord_index],
-            camera=camera
+            camera=camera,
+            save_interval=150,
         )
         
     except Exception as e:
