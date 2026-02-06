@@ -58,6 +58,7 @@ import os
 import requests
 from ultralytics import YOLO
 
+from api.api_class import api_class
 from area_calculation.area_calculation import AreaCalculator
 from area_calculation.calculations import load_shelf_coordinates_from_json
 from camera.camera import Camera
@@ -338,19 +339,12 @@ class ShowPicture:
                         'ip_camera': ip_camera
                     }
                     
-                    # Отправляем POST запрос на API
-                    try:
-                        response = requests.post(api_url, files=files, data=data, timeout=10)
-                        
-                        if response.status_code == 200:
-                            print(f"[{time.strftime('%Y-%m-%d %H:%M:%S')}] Данные успешно отправлены: "
-                                  f"ID магазина={id_store}, Наполнение={void_percentage}%, IP={ip_camera}")
-                        else:
-                            print(f"[{time.strftime('%Y-%m-%d %H:%M:%S')}] Ошибка отправки данных: "
-                                  f"HTTP {response.status_code} - {response.text}. response: {response}")
-                    
-                    except requests.exceptions.RequestException as e:
-                        print(f"[{time.strftime('%Y-%m-%d %H:%M:%S')}] Ошибка подключения к API: {e}")
+                    api_class.send_camera_data(
+                        files=files,
+                        data=data,
+                        void_percentage=void_percentage,
+                        ip_camera=ip_camera
+                    )
                     
                     # Ждем перед следующей отправкой
                     time.sleep(time_interval)
